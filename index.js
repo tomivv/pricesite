@@ -1,11 +1,22 @@
-const express = require('express')
-const app = express()
-const port = 3000
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const api = require('./api/api');
 
-const prices = require('./prices')
+const app = express();
+const port = 3001;
 
-const testi = prices.lowestPrice()
 
-app.get('/', (req, res) => res.send(`tuotteen hinta on: ${testi}`))
+app.use(cors());
 
-app.listen(port, () => console.log(`App running on http://localhost:${port}`))
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+
+app.get('/', (req, res) => {
+    res.send(`${JSON.stringify(test)}`);
+});
+
+app.use('/api', api)
+
+app.listen(port, () => console.log(`App running on http://localhost:${port}`));
