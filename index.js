@@ -14,7 +14,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 
 app.get('/', (req, res) => {
-    res.send(`${JSON.stringify(test)}`);
+    res.send(`hahah`);
 });
 
 app.use('/api', api)
