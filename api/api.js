@@ -5,7 +5,7 @@ const router = express.Router();
 const price = require('./prices');
 
 router.use(function(req, res, next) {
-    next();
+  next();
 });
 
 router.route('/product/:ean').get(price.lowestPrice);
