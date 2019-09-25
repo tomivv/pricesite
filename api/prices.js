@@ -16,27 +16,41 @@ async function priceFromGigantti(ean) {
 
   const response = await axios.get(`https://www.gigantti.fi/search?SearchTerm=${ean}`);
   const $ = cheerio.load(response.data);
-  const elemns = $('meta');
+  let elements = $('meta');
 
-  for (let i = 0; i < elemns.length; i++) {
-    if (elemns[i].attribs.itemprop === 'price') {
-      result.price = parseFloat(elemns[i].attribs.content);
+  for (let i = 0; i < elements.length; i++) {
+    if (elements[i].attribs.itemprop === 'price') {
+      result.price = parseFloat(elements[i].attribs.content);
       result.success = true;
     }
   }
 
-  if (result.price === -1) {
-    result.success = false;
+  elements = $('h1');
+
+  for (let i = 0; i < elements.length; i++) {
+    if(elements[i].attribs.class === 'product-title') {
+      result.name = elements[i].children[0].data;
+    }
   }
 
-  return result.price;
+  elements = $('link');
+
+  for (let i = 0; i < elements.length; i++) {
+    if (elements[i].attribs.itemprop === 'url') {
+      result.link = elements[i].attribs.href;
+    }
+  }
+
+  return JSON.stringify(result);
 }
 
 async function priceFromPower(ean) {
   const main = '.product-price-new';
   const decimal = '.product-price-decimal';
+  const name = '.product-name';
+  const url = '.product__link';
 
-  const result = {
+  let result = {
     success: false,
     price: -1,
     name: '',
@@ -45,26 +59,43 @@ async function priceFromPower(ean) {
 
   await nightmare.goto(`https://www.power.fi/haku/?q=${ean}`);
 
-  await nightmare.wait(main);
+  await nightmare.wait();
 
-  result.price = await nightmare.evaluate(
-    (main, decimal) => {
-      let price;
-      if (document.querySelector(main) !== null) {
-        price += parseFloat(document.querySelector(main).innerText);
+  result = await nightmare.evaluate(
+    (main, decimal, name, url) => {
+      let result = {
+        success: false,
+        price: -1,
+        name: '',
+        link: '',
+      };
+      if (document.querySelector(decimal) !== null) {
+        result.price += parseFloat(document.querySelector(main).innerText);
+        result.success = true;
       }
       if (document.querySelector(decimal) !== null) {
-        price += parseFloat(document.querySelector(decimal).innerText / 100);
+        result.price += parseFloat(document.querySelector(decimal).innerText / 100);
       }
-      return price;
+      if (document.querySelector(name) !== null) {
+        result.name = document.querySelector(name).innerText;
+      }
+      if (document.querySelector(url) !== null) {
+        result.link = document.querySelector(url).href;
+      }
+
+      return result;
     },
     main,
-    decimal
+    decimal,
+    name,
+    url
   );
 
   await nightmare.end();
 
-  return result.price;
+  await nightmare.catch();
+
+  return JSON.stringify(result);
 }
 
 async function lowestPrice(req, res) {
@@ -73,10 +104,10 @@ async function lowestPrice(req, res) {
   const power = await priceFromPower(req.params.ean);
   console.log(`power: ${power}`);
   if (gigsu < power) {
-    res.status(200).send('gigsu');
+    res.status(200).send(gigsu);
   }
   if (power < gigsu) {
-    res.status(200).send('power');
+    res.status(200).send(power);
   } else {
     res.status(200).send('samat');
   }
