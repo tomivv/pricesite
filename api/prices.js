@@ -14,32 +14,47 @@ async function priceFromGigantti(ean) {
     link: '',
   };
 
-  const response = await axios.get(`https://www.gigantti.fi/search?SearchTerm=${ean}`);
-  const $ = cheerio.load(response.data);
-  let elements = $('meta');
+  try {
 
-  for (let i = 0; i < elements.length; i++) {
-    if (elements[i].attribs.itemprop === 'price') {
-      result.price = parseFloat(elements[i].attribs.content);
-      result.success = true;
+    const response = await axios.get(`https://www.gigantti.fi/search?SearchTerm=${ean}`);
+    const $ = cheerio.load(response.data);
+
+    let elements = $('div');
+
+    for (let i = 0; i < elements.length; i++) {
+      if (elements[i].attribs.class === 'search-results-list any-1-1' || elements[i].attribs.class === 'no-search-result main-content col any-5-6 M-1-1') {
+        return JSON.stringify(result);
+      }
+    }
+
+    elements = $('meta');
+
+    for (let i = 0; i < elements.length; i++) {
+      if (elements[i].attribs.itemprop === 'price') {
+        result.price = parseFloat(elements[i].attribs.content);
+        result.success = true;
+      }
+    }
+
+    elements = $('h1');
+
+    for (let i = 0; i < elements.length; i++) {
+      if(elements[i].attribs.class === 'product-title') {
+        result.name = elements[i].children[0].data;
+      }
+    }
+
+    elements = $('link');
+
+    for (let i = 0; i < elements.length; i++) {
+      if (elements[i].attribs.itemprop === 'url') {
+        result.link = elements[i].attribs.href;
+      }
     }
   }
-
-  elements = $('h1');
-
-  for (let i = 0; i < elements.length; i++) {
-    if(elements[i].attribs.class === 'product-title') {
-      result.name = elements[i].children[0].data;
-    }
-  }
-
-  elements = $('link');
-
-  for (let i = 0; i < elements.length; i++) {
-    if (elements[i].attribs.itemprop === 'url') {
-      result.link = elements[i].attribs.href;
-    }
-  }
+  catch(error) {
+    console.log(error);
+  };
 
   return JSON.stringify(result);
 }
@@ -57,60 +72,141 @@ async function priceFromPower(ean) {
     link: '',
   };
 
-  await nightmare.goto(`https://www.power.fi/haku/?q=${ean}`);
+  // pwr-product-list
 
-  await nightmare.wait();
+  try {
 
-  result = await nightmare.evaluate(
-    (main, decimal, name, url) => {
-      let result = {
-        success: false,
-        price: -1,
-        name: '',
-        link: '',
-      };
-      if (document.querySelector(decimal) !== null) {
-        result.price += parseFloat(document.querySelector(main).innerText);
+    await nightmare.goto(`https://www.power.fi/haku/?q=${ean}`);
+
+    await nightmare.wait();
+
+    result = await nightmare.evaluate(
+      (main, decimal, name, url) => {
+        let result = {
+          success: false,
+          price: -1,
+          name: '',
+          link: '',
+        };
+        if (document.querySelector('pwr-product-list').children.length === 0) {
+          return result;
+        }
+        if (document.querySelector(decimal) !== null) {
+          result.price += parseFloat(document.querySelector(main).innerText);
+          result.success = true;
+        }
+        else if (document.querySelector(decimal) !== null) {
+          result.price += parseFloat(document.querySelector(decimal).innerText / 100);
+        }
+        else if (document.querySelector(name) !== null) {
+          result.name = document.querySelector(name).innerText;
+        }
+        else if (document.querySelector(url) !== null) {
+          result.link = document.querySelector(url).href;
+        }
+
+        return result;
+      },
+      main,
+      decimal,
+      name,
+      url
+    );
+
+    await nightmare.end();
+
+    await nightmare.catch();
+  }
+  catch (error) {
+    console.log(error);
+  }
+
+  return JSON.stringify(result);
+}
+
+async function priceFromCdon(ean) {
+  const result = {
+    success: false,
+    price: -1,
+    name: '',
+    link: '',
+  };
+
+  try {
+
+    const response = await axios.get(`https://cdon.fi/search?q=${ean}`);
+
+    const $ = cheerio.load(response.data);
+    $('nav').remove();
+
+
+    let elements = $('p');
+
+    for (let i = 0; i < elements.length; i++) {
+      if (elements[i].attribs.class === 'did-you-mean') {
+        return JSON.stringify(result);
+      }
+    }
+
+    elements = $('div');
+
+    for (let i = 0; i < elements.length; i++) {
+      if (elements[i].attribs.class === 'price') {
+        const price = parseFloat(elements[i].children[0].data.substring(3,elements[i].children[0].data.length));
+        result.price = price;
         result.success = true;
       }
-      if (document.querySelector(decimal) !== null) {
-        result.price += parseFloat(document.querySelector(decimal).innerText / 100);
+      if (elements[i].attribs.class === 'product-title-wrapper') {
+        for (let x = 0; x < elements[i].children.length; x++) {
+          if (elements[i].children[x].name === 'a') {
+            result.link = `https://cdon.fi${elements[i].children[x].attribs.href}`;
+            result.name = elements[i].children[x].attribs.title;
+          }
+        }
       }
-      if (document.querySelector(name) !== null) {
-        result.name = document.querySelector(name).innerText;
-      }
-      if (document.querySelector(url) !== null) {
-        result.link = document.querySelector(url).href;
-      }
-
-      return result;
-    },
-    main,
-    decimal,
-    name,
-    url
-  );
-
-  await nightmare.end();
-
-  await nightmare.catch();
+    }
+  }
+  catch (error) {
+    console.log(error);
+  }
 
   return JSON.stringify(result);
 }
 
 async function lowestPrice(req, res) {
-  const gigsu = await priceFromGigantti(req.params.ean);
-  console.log(`gigsu: ${gigsu}`);
+  console.log(`Etsitään halvin hinta tuotteelle: ${req.params.ean}`)
+
+  let prices = [];
+
+  const gigantti = await priceFromGigantti(req.params.ean);
   const power = await priceFromPower(req.params.ean);
-  console.log(`power: ${power}`);
-  if (gigsu < power) {
-    res.status(200).send(gigsu);
+  const cdon = await priceFromCdon(req.params.ean);
+
+  prices.push(JSON.parse(gigantti));
+  prices.push(JSON.parse(power));
+  prices.push(JSON.parse(cdon));
+
+  let lowest = 0;
+  let indexForLowest = [];
+
+  for (let i = 0; i < prices.length; i++) {
+    if (lowest === 0 && prices[i].success) {
+      lowest = prices[i].price;
+    }
+    else if (prices[i].price < lowest && prices[i].success) {
+      lowest = prices[i].price;
+      indexForLowest = [];
+      indexForLowest.push(i);
+    }
+     else if (prices[i].price === lowest && prices[i].success) {
+      indexForLowest.push(i);
+    }
   }
-  if (power < gigsu) {
-    res.status(200).send(power);
-  } else {
-    res.status(200).send('samat');
-  }
+
+  // TODO: funktio joka palauttaa tarvittaessa 2 tai useampaa sivustoa.
+  // TODO: jos mikään sivu ei löydä hintaa palauta virhe.
+
+  res.status(200).send(prices[indexForLowest]);
 }
 
 module.exports = {
