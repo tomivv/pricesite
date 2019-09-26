@@ -15,14 +15,16 @@ async function priceFromGigantti(ean) {
   };
 
   try {
-
     const response = await axios.get(`https://www.gigantti.fi/search?SearchTerm=${ean}`);
     const $ = cheerio.load(response.data);
 
     let elements = $('div');
 
     for (let i = 0; i < elements.length; i++) {
-      if (elements[i].attribs.class === 'search-results-list any-1-1' || elements[i].attribs.class === 'no-search-result main-content col any-5-6 M-1-1') {
+      if (
+        elements[i].attribs.class === 'search-results-list any-1-1' ||
+        elements[i].attribs.class === 'no-search-result main-content col any-5-6 M-1-1'
+      ) {
         return JSON.stringify(result);
       }
     }
@@ -39,7 +41,7 @@ async function priceFromGigantti(ean) {
     elements = $('h1');
 
     for (let i = 0; i < elements.length; i++) {
-      if(elements[i].attribs.class === 'product-title') {
+      if (elements[i].attribs.class === 'product-title') {
         result.name = elements[i].children[0].data;
       }
     }
@@ -51,10 +53,9 @@ async function priceFromGigantti(ean) {
         result.link = elements[i].attribs.href;
       }
     }
-  }
-  catch(error) {
+  } catch (error) {
     console.log(error);
-  };
+  }
 
   return JSON.stringify(result);
 }
@@ -73,14 +74,13 @@ async function priceFromPower(ean) {
   };
 
   try {
-
     await nightmare.goto(`https://www.power.fi/haku/?q=${ean}`);
 
     await nightmare.wait();
 
     result = await nightmare.evaluate(
       (main, decimal, name, url) => {
-        let result = {
+        const result = {
           success: false,
           price: -1,
           name: '',
@@ -93,13 +93,13 @@ async function priceFromPower(ean) {
           result.price += parseFloat(document.querySelector(main).innerText);
           result.success = true;
         }
-        else if (document.querySelector(decimal) !== null) {
+        if (document.querySelector(decimal) !== null) {
           result.price += parseFloat(document.querySelector(decimal).innerText / 100);
         }
-        else if (document.querySelector(name) !== null) {
+        if (document.querySelector(name) !== null) {
           result.name = document.querySelector(name).innerText;
         }
-        else if (document.querySelector(url) !== null) {
+        if (document.querySelector(url) !== null) {
           result.link = document.querySelector(url).href;
         }
 
@@ -114,8 +114,7 @@ async function priceFromPower(ean) {
     await nightmare.end();
 
     await nightmare.catch();
-  }
-  catch (error) {
+  } catch (error) {
     console.log(error);
   }
 
@@ -131,12 +130,10 @@ async function priceFromCdon(ean) {
   };
 
   try {
-
     const response = await axios.get(`https://cdon.fi/search?q=${ean}`);
 
     const $ = cheerio.load(response.data);
     $('nav').remove();
-
 
     let elements = $('p');
 
@@ -150,7 +147,7 @@ async function priceFromCdon(ean) {
 
     for (let i = 0; i < elements.length; i++) {
       if (elements[i].attribs.class === 'price') {
-        const price = parseFloat(elements[i].children[0].data.substring(3,elements[i].children[0].data.length));
+        const price = parseFloat(elements[i].children[0].data.substring(3, elements[i].children[0].data.length));
         result.price = price;
         result.success = true;
       }
@@ -163,8 +160,7 @@ async function priceFromCdon(ean) {
         }
       }
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.log(error);
   }
 
@@ -187,7 +183,7 @@ async function priceFromVk(ean) {
 
     for (let i = 0; i < elements.length; i++) {
       if (elements[i].attribs.class === 'list-product-info__link') {
-        result.link = `https://www.verkkokauppa.com/${elements[i].attribs.href}`;
+        result.link = `https://www.verkkokauppa.com${elements[i].attribs.href}`;
         result.name = elements[i].children[0].data;
       }
     }
@@ -195,17 +191,18 @@ async function priceFromVk(ean) {
     elements = $('span');
 
     for (let i = 0; i < elements.length; i++) {
-      if (elements[i].attribs.class === 'product-price__price product-price__price--large product-price__mutation-fix') {
-        const price = parseInt(elements[i].children[0].data);
-        const decimal = parseFloat(elements[i].children[0].next.children[0].data);
+      if (
+        elements[i].attribs.class === 'product-price__price product-price__price--large product-price__mutation-fix'
+      ) {
+        const price = parseInt(elements[i].children[0].data.replace(/\s/g, ''));
+        const decimal = parseFloat(elements[i].children[0].next.children[0].data / 100);
         result.price = parseFloat(price + decimal);
         if (result.price > -1) {
           result.success = true;
         }
       }
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.log(error);
   }
 
@@ -216,7 +213,7 @@ async function lowestPrice(req, res) {
   console.log(`Etsitään halvin hinta tuotteelle: ${req.params.ean}`);
   console.log(``);
 
-  let prices = [];
+  const prices = [];
 
   console.log(`haetaan hintoja sivuilta!`);
   const gigantti = await priceFromGigantti(req.params.ean);
@@ -239,13 +236,11 @@ async function lowestPrice(req, res) {
     if (lowest === 0 && prices[i].success === true) {
       lowest = prices[i].price;
       indexForLowest.push(i);
-    }
-    else if (prices[i].price < lowest && prices[i].success === true) {
+    } else if (prices[i].price < lowest && prices[i].success === true) {
       lowest = prices[i].price;
       indexForLowest = [];
       indexForLowest.push(i);
-    }
-     else if (prices[i].price === lowest && prices[i].success === true) {
+    } else if (prices[i].price === lowest && prices[i].success === true) {
       indexForLowest.push(i);
     }
   }
