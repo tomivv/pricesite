@@ -72,8 +72,6 @@ async function priceFromPower(ean) {
     link: '',
   };
 
-  // pwr-product-list
-
   try {
 
     await nightmare.goto(`https://www.power.fi/haku/?q=${ean}`);
@@ -173,35 +171,89 @@ async function priceFromCdon(ean) {
   return JSON.stringify(result);
 }
 
+async function priceFromVk(ean) {
+  const result = {
+    success: false,
+    price: -1,
+    name: '',
+    link: '',
+  };
+
+  try {
+    const response = await axios.get(`https://www.verkkokauppa.com/fi/search?query=${ean}`);
+    const $ = cheerio.load(response.data);
+
+    let elements = $('a');
+
+    for (let i = 0; i < elements.length; i++) {
+      if (elements[i].attribs.class === 'list-product-info__link') {
+        result.link = `https://www.verkkokauppa.com/${elements[i].attribs.href}`;
+        result.name = elements[i].children[0].data;
+      }
+    }
+
+    elements = $('span');
+
+    for (let i = 0; i < elements.length; i++) {
+      if (elements[i].attribs.class === 'product-price__price product-price__price--large product-price__mutation-fix') {
+        const price = parseInt(elements[i].children[0].data);
+        const decimal = parseFloat(elements[i].children[0].next.children[0].data);
+        result.price = parseFloat(price + decimal);
+        if (result.price > -1) {
+          result.success = true;
+        }
+      }
+    }
+  }
+  catch (error) {
+    console.log(error);
+  }
+
+  return JSON.stringify(result);
+}
+
 async function lowestPrice(req, res) {
-  console.log(`Etsitään halvin hinta tuotteelle: ${req.params.ean}`)
+  console.log(`Etsitään halvin hinta tuotteelle: ${req.params.ean}`);
+  console.log(``);
 
   let prices = [];
 
+  console.log(`haetaan hintoja sivuilta!`);
   const gigantti = await priceFromGigantti(req.params.ean);
   const power = await priceFromPower(req.params.ean);
   const cdon = await priceFromCdon(req.params.ean);
+  const vk = await priceFromVk(req.params.ean);
+
+  console.log(``);
+  console.log(`verrataan hintoja`);
 
   prices.push(JSON.parse(gigantti));
   prices.push(JSON.parse(power));
   prices.push(JSON.parse(cdon));
+  prices.push(JSON.parse(vk));
 
   let lowest = 0;
   let indexForLowest = [];
 
   for (let i = 0; i < prices.length; i++) {
-    if (lowest === 0 && prices[i].success) {
+    if (lowest === 0 && prices[i].success === true) {
       lowest = prices[i].price;
+      indexForLowest.push(i);
     }
-    else if (prices[i].price < lowest && prices[i].success) {
+    else if (prices[i].price < lowest && prices[i].success === true) {
       lowest = prices[i].price;
       indexForLowest = [];
       indexForLowest.push(i);
     }
-     else if (prices[i].price === lowest && prices[i].success) {
+     else if (prices[i].price === lowest && prices[i].success === true) {
       indexForLowest.push(i);
     }
   }
+
+  console.log(``);
+  console.log(`halvin hinta tuotteelle: ${prices[indexForLowest].name}`);
+  console.log(`Hinta: ${prices[indexForLowest].price}`);
+  console.log(`linkki: ${prices[indexForLowest].link}`);
 
   // TODO: funktio joka palauttaa tarvittaessa 2 tai useampaa sivustoa.
   // TODO: jos mikään sivu ei löydä hintaa palauta virhe.
