@@ -209,22 +209,44 @@ async function priceFromVk(ean) {
   return JSON.stringify(result);
 }
 
+async function priceFromJimms(SearchTerm) {
+  try {
+    const response = await axios.get(`https://www.jimms.fi/fi/Product/Search2?q=${SearchTerm}`);
+    const $ = cheerio.load(response.data);
+
+    const elements = $('div');
+
+    const asd = 'data-bind';
+
+    for (let i = 0; i < elements.length; i++) {
+      if (elements[i].attribs.asd === 'visible: hasItems, foreach: items') {
+        elements[i].children[1].children.forEach(item => {
+          console.log(item);
+        });
+      }
+      console.log(elements[i].attribs);
+    }
+  } catch (error) {
+    console.log(error);
+  }
+}
+
 async function lowestPrice(req, res) {
-  console.log(`Etsitään halvin hinta tuotteelle: ${req.params.ean}`);
   console.log(``);
+  console.log(`Etsitään halvin hinta tuotteelle: ${req.params.ean}`);
 
   const prices = [];
 
   console.log(`haetaan hintoja sivuilta!`);
-  const gigantti = await priceFromGigantti(req.params.ean);
+  const jimms = await priceFromJimms(req.params.ean);
+  /* const gigantti = await priceFromGigantti(req.params.ean);
   const power = await priceFromPower(req.params.ean);
   const cdon = await priceFromCdon(req.params.ean);
-  const vk = await priceFromVk(req.params.ean);
+  const vk = await priceFromVk(req.params.ean); */
 
-  console.log(``);
   console.log(`verrataan hintoja`);
 
-  prices.push(JSON.parse(gigantti));
+  /* prices.push(JSON.parse(gigantti));
   prices.push(JSON.parse(power));
   prices.push(JSON.parse(cdon));
   prices.push(JSON.parse(vk));
@@ -243,17 +265,13 @@ async function lowestPrice(req, res) {
     } else if (prices[i].price === lowest && prices[i].success === true) {
       indexForLowest.push(i);
     }
-  }
-
-  console.log(``);
-  console.log(`halvin hinta tuotteelle: ${prices[indexForLowest].name}`);
-  console.log(`Hinta: ${prices[indexForLowest].price}`);
-  console.log(`linkki: ${prices[indexForLowest].link}`);
+  } */
 
   // TODO: funktio joka palauttaa tarvittaessa 2 tai useampaa sivustoa.
   // TODO: jos mikään sivu ei löydä hintaa palauta virhe.
-
-  res.status(200).send(prices[indexForLowest]);
+  console.log(`valmis!`);
+  // res.status(200).send(prices[indexForLowest]);
+  res.status(200).send('onnistui');
 }
 
 module.exports = {
