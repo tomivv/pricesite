@@ -238,15 +238,15 @@ async function lowestPrice(req, res) {
   const prices = [];
 
   console.log(`haetaan hintoja sivuilta!`);
-  const jimms = await priceFromJimms(req.params.ean);
-  /* const gigantti = await priceFromGigantti(req.params.ean);
+  // const jimms = await priceFromJimms(req.params.ean);
+  const gigantti = await priceFromGigantti(req.params.ean);
   const power = await priceFromPower(req.params.ean);
   const cdon = await priceFromCdon(req.params.ean);
-  const vk = await priceFromVk(req.params.ean); */
+  const vk = await priceFromVk(req.params.ean);
 
   console.log(`verrataan hintoja`);
 
-  /* prices.push(JSON.parse(gigantti));
+  prices.push(JSON.parse(gigantti));
   prices.push(JSON.parse(power));
   prices.push(JSON.parse(cdon));
   prices.push(JSON.parse(vk));
@@ -265,13 +265,13 @@ async function lowestPrice(req, res) {
     } else if (prices[i].price === lowest && prices[i].success === true) {
       indexForLowest.push(i);
     }
-  } */
+  }
 
   // TODO: funktio joka palauttaa tarvittaessa 2 tai useampaa sivustoa.
   // TODO: jos mikään sivu ei löydä hintaa palauta virhe.
   console.log(`valmis!`);
-  // res.status(200).send(prices[indexForLowest]);
-  res.status(200).send('onnistui');
+  res.status(200).send([prices[indexForLowest]]);
+  // res.status(200).send('onnistui');
 }
 
 module.exports = {
