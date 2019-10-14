@@ -89,7 +89,7 @@ async function priceFromPower(ean) {
         if (document.querySelector('pwr-product-list').children.length === 0) {
           return result;
         }
-        if (document.querySelector(decimal) !== null) {
+        if (document.querySelector(main) !== null) {
           result.price += parseFloat(document.querySelector(main).innerText);
           result.success = true;
         }
@@ -210,25 +210,51 @@ async function priceFromVk(ean) {
 }
 
 async function priceFromJimms(SearchTerm) {
+  const price = '.p_price';
+  const name = '.p_name';
+
+  let result = {
+    success: false,
+    price: -1,
+    name: '',
+    link: '',
+  };
+
   try {
-    const response = await axios.get(`https://www.jimms.fi/fi/Product/Search2?q=${SearchTerm}`);
-    const $ = cheerio.load(response.data);
+    await nightmare.goto(`https://www.jimms.fi/fi/Product/Search2?q=${SearchTerm}`);
+    result = await nightmare.evaluate(
+      (price, name) => {
+        const result = {
+          success: false,
+          price: -1,
+          name: '',
+          link: '',
+        };
 
-    const elements = $('div');
+        const noResult = `Hakusanalla ei löydetty suoria osumia, tulokset hakuusi läheisesti liittyviä.`;
 
-    const asd = 'data-bind';
+        if (document.querySelector('.help-block').innerText !== noResult) {
+          result.price = parseFloat(document.querySelector(price).firstElementChild.innerText.replace(',', '.'));
 
-    for (let i = 0; i < elements.length; i++) {
-      if (elements[i].attribs.asd === 'visible: hasItems, foreach: items') {
-        elements[i].children[1].children.forEach(item => {
-          console.log(item);
-        });
-      }
-      console.log(elements[i].attribs);
-    }
+          result.name = document.querySelector(name).children[0].children[0].innerText;
+          result.name += ` ${document.querySelector(name).children[0].children[1].innerText}`;
+
+          result.link = document.querySelector(name).firstElementChild.href;
+        }
+
+        if (result.price > -1) {
+          result.success = true;
+        }
+        return result;
+      },
+      price,
+      name
+    );
   } catch (error) {
     console.log(error);
   }
+
+  return JSON.stringify(result);
 }
 
 async function lowestPrice(req, res) {
@@ -237,19 +263,22 @@ async function lowestPrice(req, res) {
 
   const prices = [];
 
+  const SearchTerm = req.params.ean;
+
   console.log(`haetaan hintoja sivuilta!`);
-  const jimms = await priceFromJimms(req.params.ean);
-  /* const gigantti = await priceFromGigantti(req.params.ean);
-  const power = await priceFromPower(req.params.ean);
-  const cdon = await priceFromCdon(req.params.ean);
-  const vk = await priceFromVk(req.params.ean); */
+  const jimms = await priceFromJimms(SearchTerm);
+  const gigantti = await priceFromGigantti(SearchTerm);
+  const power = await priceFromPower(SearchTerm);
+  const cdon = await priceFromCdon(SearchTerm);
+  const vk = await priceFromVk(SearchTerm);
 
   console.log(`verrataan hintoja`);
 
-  /* prices.push(JSON.parse(gigantti));
+  prices.push(JSON.parse(gigantti));
   prices.push(JSON.parse(power));
   prices.push(JSON.parse(cdon));
   prices.push(JSON.parse(vk));
+  prices.push(JSON.parse(jimms));
 
   let lowest = 0;
   let indexForLowest = [];
@@ -265,13 +294,20 @@ async function lowestPrice(req, res) {
     } else if (prices[i].price === lowest && prices[i].success === true) {
       indexForLowest.push(i);
     }
-  } */
+  }
 
-  // TODO: funktio joka palauttaa tarvittaessa 2 tai useampaa sivustoa.
-  // TODO: jos mikään sivu ei löydä hintaa palauta virhe.
   console.log(`valmis!`);
-  // res.status(200).send(prices[indexForLowest]);
-  res.status(200).send('onnistui');
+  if (indexForLowest.length === 0) {
+    res.status(200).send(`ei tuloksia`);
+  }
+  if (indexForLowest.length > 1) {
+    const multi = [];
+    indexForLowest.forEach(result => {
+      multi.push(prices[result]);
+    });
+    res.status(200).send(multi);
+  }
+  res.status(200).send(prices[indexForLowest]);
 }
 
 module.exports = {
