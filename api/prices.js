@@ -307,7 +307,7 @@ async function lowestPrice(req, res) {
     });
     res.status(200).send(multi);
   }
-  res.status(200).send(prices[indexForLowest]);
+  res.status(200).send([prices[indexForLowest]]);
 }
 
 module.exports = {
