@@ -10,6 +10,7 @@ async function priceFromGigantti(ean) {
     price: -1,
     name: '',
     link: '',
+    store: 'Gigantti'
   };
 
   try {
@@ -117,6 +118,7 @@ async function priceFromCdon(ean) {
     price: -1,
     name: '',
     link: '',
+    store: 'CDON'
   };
 
   try {
@@ -163,6 +165,7 @@ async function priceFromVk(ean) {
     price: -1,
     name: '',
     link: '',
+    store: 'Verkkokauppa.com'
   };
 
   try {
