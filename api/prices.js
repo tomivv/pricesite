@@ -2,9 +2,7 @@
 /* eslint-disable no-shadow */
 const axios = require('axios');
 const cheerio = require('cheerio');
-const Nightmare = require('nightmare');
-
-const nightmare = Nightmare({ show: false });
+const puppeteer = require('puppeteer');
 
 async function priceFromGigantti(ean) {
   const result = {
@@ -61,64 +59,56 @@ async function priceFromGigantti(ean) {
 }
 
 async function priceFromPower(ean) {
-  const main = '.product-price-new';
-  const decimal = '.product-price-decimal';
-  const name = '.product-name';
-  const url = '.product__link';
-
-  let result = {
+  let data = {
     success: false,
     price: -1,
     name: '',
     link: '',
+    store: 'Power'
   };
-
   try {
-    await nightmare.goto(`https://www.power.fi/haku/?q=${ean}`);
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.goto(`https://www.power.fi/haku/?q=${ean}`);
+    data = await page.evaluate(() => {
+      const result = {
+        success: false,
+        price: -1,
+        name: '',
+        link: '',
+        store: 'Power'
+      };
 
-    await nightmare.wait();
+      const main = '.product-price-new';
+      const decimal = '.product-price-decimal';
+      const name = '.product-name';
+      const url = '.product__link';
 
-    result = await nightmare.evaluate(
-      (main, decimal, name, url) => {
-        const result = {
-          success: false,
-          price: -1,
-          name: '',
-          link: '',
-        };
-        if (document.querySelector('pwr-product-list').children.length === 0) {
-          return result;
-        }
-        if (document.querySelector(main) !== null) {
-          result.price += parseFloat(document.querySelector(main).innerText);
-          result.success = true;
-        }
-        if (document.querySelector(decimal) !== null) {
-          result.price += parseFloat(document.querySelector(decimal).innerText / 100);
-        }
-        if (document.querySelector(name) !== null) {
-          result.name = document.querySelector(name).innerText;
-        }
-        if (document.querySelector(url) !== null) {
-          result.link = document.querySelector(url).href;
-        }
-
+      if (document.querySelector('pwr-product-list').children.length === 0) {
         return result;
-      },
-      main,
-      decimal,
-      name,
-      url
-    );
+      }
+      if (document.querySelector(main) !== null) {
+        result.price += parseInt(document.querySelector(main).innerText);
+        result.success = true;
+      }
+      if (document.querySelector(decimal) !== null) {
+        result.price += parseFloat(document.querySelector(decimal).innerText / 100);
+      }
+      if (document.querySelector(name) !== null) {
+        result.name = document.querySelector(name).innerText;
+      }
+      if (document.querySelector(url) !== null) {
+        result.link = document.querySelector(url).href;
+      }
+      return result;
+    })
 
-    await nightmare.end();
-
-    await nightmare.catch();
+    await browser.close();
   } catch (error) {
     console.log(error);
   }
 
-  return JSON.stringify(result);
+  return JSON.stringify(data);
 }
 
 async function priceFromCdon(ean) {
@@ -210,28 +200,31 @@ async function priceFromVk(ean) {
 }
 
 async function priceFromJimms(SearchTerm) {
-  const price = '.p_price';
-  const name = '.p_name';
-
-  let result = {
+  let data = {
     success: false,
     price: -1,
     name: '',
     link: '',
+    store: 'Jimms'
   };
 
   try {
-    await nightmare.goto(`https://www.jimms.fi/fi/Product/Search2?q=${SearchTerm}`);
-    result = await nightmare.evaluate(
-      (price, name) => {
-        const result = {
-          success: false,
-          price: -1,
-          name: '',
-          link: '',
-        };
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.goto(`https://www.jimms.fi/fi/Product/Search2?q=${SearchTerm}`);
+    data = await page.evaluate(() => {
+      const result = {
+        success: false,
+        price: -1,
+        name: '',
+        link: '',
+        store: 'Jimms'
+      };
 
-        const noResult = `Hakusanalla ei löydetty suoria osumia, tulokset hakuusi läheisesti liittyviä.`;
+      const price = '.p_price';
+      const name = '.p_name';
+
+      const noResult = `Hakusanalla ei löydetty suoria osumia, tulokset hakuusi läheisesti liittyviä.`;
 
         if (document.querySelector('.help-block').innerText !== noResult) {
           result.price = parseFloat(document.querySelector(price).firstElementChild.innerText.replace(',', '.'));
@@ -245,16 +238,15 @@ async function priceFromJimms(SearchTerm) {
         if (result.price > -1) {
           result.success = true;
         }
-        return result;
-      },
-      price,
-      name
-    );
+      return result;
+    })
+
+    await browser.close();
   } catch (error) {
     console.log(error);
   }
 
-  return JSON.stringify(result);
+  return JSON.stringify(data);
 }
 
 async function lowestPrice(req, res) {
@@ -298,16 +290,16 @@ async function lowestPrice(req, res) {
 
   console.log(`valmis!`);
   if (indexForLowest.length === 0) {
-    res.status(200).send(`ei tuloksia`);
-  }
-  if (indexForLowest.length > 1) {
+    res.status(200).send(JSON.stringify({failed: true}));
+  } else if (indexForLowest.length > 1) {
     const multi = [];
     indexForLowest.forEach(result => {
       multi.push(prices[result]);
     });
     res.status(200).send(multi);
+  } else {
+    res.status(200).send([prices[indexForLowest]]);
   }
-  res.status(200).send([prices[indexForLowest]]);
 }
 
 module.exports = {
