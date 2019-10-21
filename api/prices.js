@@ -50,6 +50,8 @@ async function priceFromGigantti(ean) {
       }
       return result;
     })
+    
+    await browser.close();
   } catch (error) {
     console.error(error);
   }
