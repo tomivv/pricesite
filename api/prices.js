@@ -1,8 +1,9 @@
-/* eslint-disable no-plusplus */
-/* eslint-disable no-shadow */
 const axios = require('axios');
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
+
+// TODO: korjaa cdon käyttämään puppeteeriä,
+// viimeistelyjä jimms haku iffeihin
 
 async function priceFromGigantti(ean) {
   let data = {
@@ -41,7 +42,7 @@ async function priceFromGigantti(ean) {
         }
         if (result.productCode !== '') { break; }
       }
-      // result.price = parseFloat(document.querySelector('.product-price-container').innerText.replace(',', '.'));
+      result.price = parseFloat(document.querySelector('.product-price-container').innerText.replace(',', '.'));
       result.name = document.querySelector('.product-title').innerText;
       result.link = document.querySelector('link').baseURI;
       if (result.price > -1) {
@@ -67,7 +68,11 @@ async function priceFromPower(ean) {
   try {
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
-    await page.goto(`https://www.power.fi/haku/?q=${ean}`);
+    if (ean[0] === '0') {
+      await page.goto(`https://www.power.fi/haku/?q=${ean.substring(1, ean.length)}`);
+    } else {
+      await page.goto(`https://www.power.fi/haku/?q=${ean}`);
+    }
     data = await page.evaluate(() => {
       const result = {
         success: false,
@@ -155,7 +160,7 @@ async function priceFromCdon(productCode) {
 }
 
 async function priceFromVk(ean) {
-  const result = {
+  let result = {
     success: false,
     price: -1,
     name: '',
@@ -165,45 +170,38 @@ async function priceFromVk(ean) {
   };
 
   try {
-    let response = await axios.get(`https://www.verkkokauppa.com/fi/search?query=${ean}`);
-    let $ = cheerio.load(response.data);
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.goto(`https://www.verkkokauppa.com/fi/search?query=${ean}`);
+    await page.waitForSelector('.product-list-detailed');
+    result = await page.evaluate(() => {
+      const data = {
+        success: false,
+        price: -1,
+        name: '',
+        link: '',
+        store: 'Verkkokauppa.com',
+        productCode: ''
+      };
 
-    let elements = $('a');
-
-    let productCodeLink = '';
-
-    for (let i = 0; i < elements.length; i++) {
-      console.log(elements[i].attribs.class)
-      if (elements[i].attribs.class === 'list-product-info__link') {
-        result.link = `https://www.verkkokauppa.com${elements[i].attribs.href}`;
-        result.name = elements[i].children[0].data;
-      }
-    }
-
-    elements = $('span');
-
-    for (let i = 0; i < elements.length; i++) {
-      if (
-        elements[i].attribs.class === 'product-price__price product-price__price--large product-price__mutation-fix'
-      ) {
-        // const price = parseInt(elements[i].children[0].data.replace(/\s/g, ''));
-        const decimal = parseFloat(elements[i].children[0].next.children[0].data / 100);
-        result.price = parseFloat(price + decimal);
-        if (result.price > -1) {
-          result.success = true;
+        data.price = parseFloat(document.querySelector('.product-price__price').innerText.replace(',', '.'));
+        data.name = document.querySelector('.list-product-info__link').innerText;
+        data.link = document.querySelector('.list-product-info__link').href;
+        if (data.price > -1) {
+          data.success = true;
         }
-      }
+      
+      return data;
+    });
+
+    if (result.link !== '') {
+      await page.goto(`${result.link}/lisatiedot`);
+      result.productCode = await page.evaluate(() => {
+        return document.querySelector('[itemprop=mpn]').innerText;
+      });
     }
 
-    response = await axios.get(productCodeLink);
-    $ = cheerio.load(response.data);
-
-    elements = $('td');
-
-    for (td in elements) {
-      console.log(td.attribs)
-    }
-
+    await browser.close();
   } catch (error) {
     console.error(error);
   }
@@ -224,7 +222,7 @@ async function priceFromJimms(productCode) {
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
     await page.goto(`https://www.jimms.fi/fi/Product/Search2?q=${productCode}`);
-    data = await page.evaluate(() => {
+    data = await page.evaluate((productCode) => {
       const result = {
         success: false,
         price: -1,
@@ -232,26 +230,32 @@ async function priceFromJimms(productCode) {
         link: '',
         store: 'Jimms'
       };
+      
+      let products = document.querySelectorAll('.p_listTmpl1');
 
-      const price = '.p_price';
-      const name = '.p_name';
+      let index = -1;
 
-      const noResult = `Hakusanalla ei löydetty suoria osumia, tulokset hakuusi läheisesti liittyviä.`;
-
-        if (document.querySelector('.help-block').innerText !== noResult) {
-          // result.price = parseFloat(document.querySelector(price).firstElementChild.innerText.replace(',', '.'));
-
-          result.name = document.querySelector(name).children[0].children[0].innerText;
-          result.name += ` ${document.querySelector(name).children[0].children[1].innerText}`;
-
-          result.link = document.querySelector(name).firstElementChild.href;
+      for (let i = 0; i < products.length; i++) {
+        if (products[i].children[2].children[1].innerText === productCode) {
+          index = i;
         }
+      }
+
+      if (index !== -1) {
+
+        let origPrice = products[index].children[1].children[0].firstElementChild.innerText.replace(/\s/g, '');
+        result.price = parseFloat(origPrice.replace(',', '.'));
+
+        result.name = products[index].children[2].children[0].innerText;
+
+        result.link = products[index].children[2].children[0].children[0].href;
 
         if (result.price > -1) {
           result.success = true;
         }
+      }
       return result;
-    })
+    }, productCode)
 
     await browser.close();
   } catch (error) {
@@ -271,24 +275,34 @@ async function lowestPrice(req, res) {
 
   console.log(`haetaan hintoja sivuilta!`);
   try {
-    // const gigantti = JSON.parse(await priceFromGigantti(SearchTerm));
-    const power = await priceFromPower(SearchTerm);
+    const gigantti = JSON.parse(await priceFromGigantti(SearchTerm));
     const vk = JSON.parse(await priceFromVk(SearchTerm));
-    console.log(vk)
-    // console.log(`jos tää toimii niin ihmettelen itekki... ${gigantti.productCode}`)
-    // etsitään tuotekoodi näille kahdelle.. ylimmistä..
-    const cdon = await priceFromCdon(SearchTerm);
-    const jimms = await priceFromJimms(SearchTerm);
+
+    let jimms = {};
+    let cdon = {};
+
+    if (vk.productCode !== '') {
+      jimms = JSON.parse(await priceFromJimms(vk.productCode));
+      cdon = JSON.parse(await priceFromCdon(vk.productCode));
+    }
+    if (jimms === {} && gigantti.productCode !== '') {
+      jimms = JSON.parse(await priceFromJimms(gigantti.productCode));
+    }
+    if (cdon === {} && gigantti.productCode !== '') {
+      cdon = JSON.parse(await priceFromCdon(gigantti.productCode));
+    }
+
+    const power = JSON.parse(await priceFromPower(SearchTerm));
 
     console.log(`verrataan hintoja`);
   
-    // prices.push(gigantti);
-    prices.push(JSON.parse(power));
-    prices.push(JSON.parse(cdon));
+    prices.push(gigantti);
+    prices.push(power);
+    prices.push(cdon);
     prices.push(vk);
-    prices.push(JSON.parse(jimms));
+    prices.push(jimms);
   } catch (error) {
-    console.log(error);
+    console.error(error);
   }
 
   let lowest = 0;
@@ -308,6 +322,7 @@ async function lowestPrice(req, res) {
   }
 
   console.log(`valmis!`);
+
   if (indexForLowest.length === 0) {
     res.status(200).send(JSON.stringify({failed: true}));
   } else if (indexForLowest.length > 1) {
