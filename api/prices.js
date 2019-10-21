@@ -166,7 +166,8 @@ async function priceFromVk(ean) {
     name: '',
     link: '',
     store: 'Verkkokauppa.com',
-    productCode: ''
+    productCode: '',
+    ean: ''
   };
 
   try {
@@ -196,9 +197,12 @@ async function priceFromVk(ean) {
 
     if (result.link !== '') {
       await page.goto(`${result.link}/lisatiedot`);
-      result.productCode = await page.evaluate(() => {
-        return document.querySelector('[itemprop=mpn]').innerText;
-      });
+      result = await page.evaluate((result) => {
+        const data = result;
+        data.productCode = document.querySelector('[itemprop=mpn]').innerText;
+        data.ean = document.querySelector('[itemprop=gtin13]').innerText.replace(/\s/g, '');
+        return data;
+      }, result);
     }
 
     await browser.close();
@@ -281,9 +285,12 @@ async function lowestPrice(req, res) {
     let jimms = {};
     let cdon = {};
 
-    if (vk.productCode !== '') {
-      jimms = JSON.parse(await priceFromJimms(vk.productCode));
-      cdon = JSON.parse(await priceFromCdon(vk.productCode));
+    if (vk.ean === SearchTerm) {
+      prices.push(vk);
+      if (vk.productCode !== '') {
+        jimms = JSON.parse(await priceFromJimms(vk.productCode));
+        cdon = JSON.parse(await priceFromCdon(vk.productCode));
+      }
     }
     if (jimms === {} && gigantti.productCode !== '') {
       jimms = JSON.parse(await priceFromJimms(gigantti.productCode));
@@ -299,7 +306,6 @@ async function lowestPrice(req, res) {
     prices.push(gigantti);
     prices.push(power);
     prices.push(cdon);
-    prices.push(vk);
     prices.push(jimms);
   } catch (error) {
     console.error(error);
