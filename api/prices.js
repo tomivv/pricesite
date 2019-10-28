@@ -1,9 +1,4 @@
-const axios = require('axios');
-const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
-
-// TODO: korjaa cdon käyttämään puppeteeriä,
-// viimeistelyjä jimms haku iffeihin
 
 async function priceFromGigantti(ean) {
   let data = {
@@ -110,53 +105,6 @@ async function priceFromPower(ean) {
   }
 
   return JSON.stringify(data);
-}
-
-async function priceFromCdon(productCode) {
-  const result = {
-    success: false,
-    price: -1,
-    name: '',
-    link: '',
-    store: 'CDON'
-  };
-
-  try {
-    const response = await axios.get(`https://cdon.fi/search?q=${productCode}`);
-
-    const $ = cheerio.load(response.data);
-    $('nav').remove();
-
-    let elements = $('p');
-
-    for (let i = 0; i < elements.length; i++) {
-      if (elements[i].attribs.class === 'did-you-mean') {
-        return JSON.stringify(result);
-      }
-    }
-
-    elements = $('div');
-
-    for (let i = 0; i < elements.length; i++) {
-      if (elements[i].attribs.class === 'price') {
-        const price = parseFloat(elements[i].children[0].data.substring(3, elements[i].children[0].data.length));
-        result.price = price;
-        result.success = true;
-      }
-      if (elements[i].attribs.class === 'product-title-wrapper') {
-        for (let x = 0; x < elements[i].children.length; x++) {
-          if (elements[i].children[x].name === 'a') {
-            result.link = `https://cdon.fi${elements[i].children[x].attribs.href}`;
-            result.name = elements[i].children[x].attribs.title;
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.log(error);
-  }
-
-  return JSON.stringify(result);
 }
 
 async function priceFromVk(ean) {
@@ -269,7 +217,7 @@ async function lowestPrice(req, res) {
   console.log(``);
   console.log(`Etsitään halvin hinta tuotteelle: ${req.params.ean}`);
 
-  const prices = [];
+  let prices = [];
 
   const SearchTerm = req.params.ean;
 
@@ -279,17 +227,12 @@ async function lowestPrice(req, res) {
     const vk = JSON.parse(await priceFromVk(SearchTerm));
 
     let jimms = {};
-    let cdon = {};
 
     if (vk.productCode !== '') {
       jimms = JSON.parse(await priceFromJimms(vk.productCode));
-      cdon = JSON.parse(await priceFromCdon(vk.productCode));
     }
     if (jimms === {} && gigantti.productCode !== '') {
       jimms = JSON.parse(await priceFromJimms(gigantti.productCode));
-    }
-    if (cdon === {} && gigantti.productCode !== '') {
-      cdon = JSON.parse(await priceFromCdon(gigantti.productCode));
     }
 
     const power = JSON.parse(await priceFromPower(SearchTerm));
@@ -298,41 +241,34 @@ async function lowestPrice(req, res) {
   
     prices.push(gigantti);
     prices.push(power);
-    prices.push(cdon);
     prices.push(vk);
     prices.push(jimms);
   } catch (error) {
     console.error(error);
   }
 
-  let lowest = 0;
-  let indexForLowest = [];
+  console.log(`valmis!`);
 
-  for (let i = 0; i < prices.length; i++) {
-    if (lowest === 0 && prices[i].success === true) {
-      lowest = prices[i].price;
-      indexForLowest.push(i);
-    } else if (prices[i].price < lowest && prices[i].success === true) {
-      lowest = prices[i].price;
-      indexForLowest = [];
-      indexForLowest.push(i);
-    } else if (prices[i].price === lowest && prices[i].success === true) {
-      indexForLowest.push(i);
+  for (let i = 0; i < prices.length; i += 1) {
+    console.log(prices[i].price === -1)
+    if (prices[i].price === -1) {
+      prices.splice(i, 1);
+      i -= 1;
     }
   }
 
-  console.log(`valmis!`);
+  prices.sort(function(a, b) { return a.price - b.price });
 
-  if (indexForLowest.length === 0) {
+  while (prices.length > 3) {
+    prices.pop();
+  }
+
+  res.status(200).send(prices)
+
+  if (prices.length === 0) {
     res.status(200).send(JSON.stringify({failed: true}));
-  } else if (indexForLowest.length > 1) {
-    const multi = [];
-    indexForLowest.forEach(result => {
-      multi.push(prices[result]);
-    });
-    res.status(200).send(multi);
   } else {
-    res.status(200).send([prices[indexForLowest]]);
+    res.status(200).send(prices);
   }
 }
 
