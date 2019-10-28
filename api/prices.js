@@ -45,6 +45,8 @@ async function priceFromGigantti(ean) {
       }
       return result;
     })
+    
+    await browser.close();
   } catch (error) {
     console.error(error);
   }
@@ -114,7 +116,8 @@ async function priceFromVk(ean) {
     name: '',
     link: '',
     store: 'Verkkokauppa.com',
-    productCode: ''
+    productCode: '',
+    ean: ''
   };
 
   try {
@@ -144,9 +147,12 @@ async function priceFromVk(ean) {
 
     if (result.link !== '') {
       await page.goto(`${result.link}/lisatiedot`);
-      result.productCode = await page.evaluate(() => {
-        return document.querySelector('[itemprop=mpn]').innerText;
-      });
+      result = await page.evaluate((result) => {
+        const data = result;
+        data.productCode = document.querySelector('[itemprop=mpn]').innerText;
+        data.ean = document.querySelector('[itemprop=gtin13]').innerText.replace(/\s/g, '');
+        return data;
+      }, result);
     }
 
     await browser.close();

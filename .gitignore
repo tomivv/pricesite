@@ -6,6 +6,3 @@ build/Release
 
 # Serverless directories
 .serverless/
-
-# visualsudio juttu ignoree..
-testi.code-workspace
