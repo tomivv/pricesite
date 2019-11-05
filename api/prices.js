@@ -37,9 +37,15 @@ async function priceFromGigantti(ean) {
         }
         if (result.productCode !== '') { break; }
       }
-      result.price = parseFloat(document.querySelector('.product-price-container').innerText.replace(',', '.'));
-      result.name = document.querySelector('.product-title').innerText;
-      result.link = document.querySelector('link').baseURI;
+      if (document.querySelector('.product-price-container') !== null) {
+        result.price = parseFloat(document.querySelector('.product-price-container').innerText.replace(',', '.'));
+      }
+      if (document.querySelector('.product-title') !== null) {
+        result.name = document.querySelector('.product-title').innerText;
+      }
+      if (document.querySelector('link') !== null) {
+        result.link = document.querySelector('link').baseURI;
+      }
       if (result.price > -1) {
         result.success = true;
       }
@@ -103,7 +109,7 @@ async function priceFromPower(ean) {
 
     await browser.close();
   } catch (error) {
-    console.log(error);
+    console.error(error);
   }
 
   return JSON.stringify(data);
@@ -124,7 +130,7 @@ async function priceFromVk(ean) {
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
     await page.goto(`https://www.verkkokauppa.com/fi/search?query=${ean}`);
-    await page.waitForSelector('.product-list-detailed');
+    await page.waitForSelector('.product-list-detailed', 2000);
     result = await page.evaluate(() => {
       const data = {
         success: false,
@@ -132,7 +138,8 @@ async function priceFromVk(ean) {
         name: '',
         link: '',
         store: 'Verkkokauppa.com',
-        productCode: ''
+        productCode: '',
+        ean: ''
       };
 
         data.price = parseFloat(document.querySelector('.product-price__price').innerText.replace(',', '.'));
@@ -149,8 +156,12 @@ async function priceFromVk(ean) {
       await page.goto(`${result.link}/lisatiedot`);
       result = await page.evaluate((result) => {
         const data = result;
-        data.productCode = document.querySelector('[itemprop=mpn]').innerText;
-        data.ean = document.querySelector('[itemprop=gtin13]').innerText.replace(/\s/g, '');
+        if (document.querySelector('[itemprop=mpn]') !== null) {
+          data.productCode = document.querySelector('[itemprop=mpn]').innerText;
+        }
+        if (document.querySelector('[itemprop=gtin13]') !== null) {
+          data.ean = document.querySelector('[itemprop=gtin13]').innerText.replace(/\s/g, '');
+        }
         return data;
       }, result);
     }
@@ -220,19 +231,21 @@ async function priceFromJimms(productCode) {
 }
 
 async function lowestPrice(req, res) {
-  console.log(``);
-  console.log(`Etsitään halvin hinta tuotteelle: ${req.params.ean}`);
 
   let prices = [];
 
   const SearchTerm = req.params.ean;
-
-  console.log(`haetaan hintoja sivuilta!`);
   try {
     const gigantti = JSON.parse(await priceFromGigantti(SearchTerm));
     const vk = JSON.parse(await priceFromVk(SearchTerm));
 
-    let jimms = {};
+    let jimms = {
+      success: false,
+      price: -1,
+      name: '',
+      link: '',
+      store: 'Jimms'
+    };
 
     if (vk.productCode !== '') {
       jimms = JSON.parse(await priceFromJimms(vk.productCode));
@@ -242,21 +255,17 @@ async function lowestPrice(req, res) {
     }
 
     const power = JSON.parse(await priceFromPower(SearchTerm));
-
-    console.log(`verrataan hintoja`);
   
     prices.push(gigantti);
     prices.push(power);
     prices.push(vk);
-    prices.push(jimms);
+    if (jimms !== {}) {
+      prices.push(jimms);
+    }
   } catch (error) {
     console.error(error);
   }
-
-  console.log(`valmis!`);
-
   for (let i = 0; i < prices.length; i += 1) {
-    console.log(prices[i].price === -1)
     if (prices[i].price === -1) {
       prices.splice(i, 1);
       i -= 1;
@@ -268,8 +277,6 @@ async function lowestPrice(req, res) {
   while (prices.length > 3) {
     prices.pop();
   }
-
-  res.status(200).send(prices)
 
   if (prices.length === 0) {
     res.status(200).send(JSON.stringify({failed: true}));
