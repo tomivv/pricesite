@@ -1,3 +1,4 @@
+/* eslint-disable no-plusplus */
 const puppeteer = require('puppeteer');
 
 async function priceFromGigantti(ean) {
@@ -24,21 +25,35 @@ async function priceFromGigantti(ean) {
         productCode: ''
       };
 
-      let elements = document.querySelectorAll('.spec-table');
+      const elements = document.querySelectorAll('.spec-table');
+      // productCode
       for (let i = 0; i < elements.length; i++) {
         for (let x = 0; x < elements[i].children[0].children.length; x++) {
-          if (elements[i].children[0].children[x].firstElementChild.innerText === 'Valmistajan tuotekoodi') {
+          if (
+            elements[i].children[0].children[x].firstElementChild.innerText ===
+            'Valmistajan tuotekoodi'
+          ) {
             result.productCode = elements[i].children[0].children[x].children[1].innerText;
             break;
-          } else if (elements[i].children[0].children[x].firstElementChild.innerText === 'Mallin tunnistusnumero') {
+          } else if (
+            elements[i].children[0].children[x].firstElementChild.innerText ===
+            'Mallin tunnistusnumero'
+          ) {
             result.productCode = elements[i].children[0].children[x].children[1].innerText;
             break;
           }
         }
-        if (result.productCode !== '') { break; }
+        if (result.productCode !== '') {
+          break;
+        }
       }
       if (document.querySelector('.product-price-container') !== null) {
-        result.price = parseFloat(document.querySelector('.product-price-container').innerText.replace(',', '.'));
+        result.price = parseFloat(
+          document
+            .querySelector('.product-price-container')
+            .innerText.replace(/\s/g, '')
+            .replace(',', '.')
+        );
       }
       if (document.querySelector('.product-title') !== null) {
         result.name = document.querySelector('.product-title').innerText;
@@ -50,8 +65,8 @@ async function priceFromGigantti(ean) {
         result.success = true;
       }
       return result;
-    })
-    
+    });
+
     await browser.close();
   } catch (error) {
     console.error(error);
@@ -94,18 +109,18 @@ async function priceFromPower(ean) {
       const recommendedElement = document.getElementById(recommended);
 
       recommendedElement.parentNode.removeChild(recommendedElement);
-      
+
       if (document.querySelector(main) !== null) {
         result.price = parseInt(document.querySelector('.product-price-new').innerText);
         result.success = true;
-        if (document.querySelector('.product-price-decimal').innerText !== "") {
+        if (document.querySelector('.product-price-decimal').innerText !== '') {
           result.price += parseFloat(document.querySelector(decimal).innerText / 100);
         }
         result.name = document.querySelector(name).innerText;
         result.link = document.querySelector(url).href;
       }
       return result;
-    })
+    });
 
     await browser.close();
   } catch (error) {
@@ -142,19 +157,24 @@ async function priceFromVk(ean) {
         ean: ''
       };
 
-        data.price = parseFloat(document.querySelector('.product-price__price').innerText.replace(',', '.'));
-        data.name = document.querySelector('.list-product-info__link').innerText;
-        data.link = document.querySelector('.list-product-info__link').href;
-        if (data.price > -1) {
-          data.success = true;
-        }
-      
+      data.price = parseFloat(
+        document
+          .querySelector('.product-price__price')
+          .innerText.replace(/\s/g, '')
+          .replace(',', '.')
+      );
+      data.name = document.querySelector('.list-product-info__link').innerText;
+      data.link = document.querySelector('.list-product-info__link').href;
+      if (data.price > -1) {
+        data.success = true;
+      }
+
       return data;
     });
 
     if (result.link !== '') {
       await page.goto(`${result.link}/lisatiedot`);
-      result = await page.evaluate((result) => {
+      result = await page.evaluate(result => {
         const data = result;
         if (document.querySelector('[itemprop=mpn]') !== null) {
           data.productCode = document.querySelector('[itemprop=mpn]').innerText;
@@ -187,7 +207,7 @@ async function priceFromJimms(productCode) {
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
     await page.goto(`https://www.jimms.fi/fi/Product/Search2?q=${productCode}`);
-    data = await page.evaluate((productCode) => {
+    data = await page.evaluate(productCode => {
       const result = {
         success: false,
         price: -1,
@@ -195,8 +215,8 @@ async function priceFromJimms(productCode) {
         link: '',
         store: 'Jimms'
       };
-      
-      let products = document.querySelectorAll('.p_listTmpl1');
+
+      const products = document.querySelectorAll('.p_listTmpl1');
 
       let index = -1;
 
@@ -207,8 +227,9 @@ async function priceFromJimms(productCode) {
       }
 
       if (index !== -1) {
-
-        let origPrice = products[index].children[1].children[0].firstElementChild.innerText.replace(/\s/g, '');
+        const origPrice = products[
+          index
+        ].children[1].children[0].firstElementChild.innerText.replace(/\s/g, '');
         result.price = parseFloat(origPrice.replace(',', '.'));
 
         result.name = products[index].children[2].children[0].innerText;
@@ -220,7 +241,7 @@ async function priceFromJimms(productCode) {
         }
       }
       return result;
-    }, productCode)
+    }, productCode);
 
     await browser.close();
   } catch (error) {
@@ -231,8 +252,7 @@ async function priceFromJimms(productCode) {
 }
 
 async function lowestPrice(req, res) {
-
-  let prices = [];
+  const prices = [];
 
   const SearchTerm = req.params.ean;
   try {
@@ -254,10 +274,10 @@ async function lowestPrice(req, res) {
       jimms = JSON.parse(await priceFromJimms(gigantti.productCode));
     }
 
-    const power = JSON.parse(await priceFromPower(SearchTerm));
-  
+    // const power = JSON.parse(await priceFromPower(SearchTerm));
+
     prices.push(gigantti);
-    prices.push(power);
+    // prices.push(power);
     prices.push(vk);
     if (jimms !== {}) {
       prices.push(jimms);
@@ -272,19 +292,21 @@ async function lowestPrice(req, res) {
     }
   }
 
-  prices.sort(function(a, b) { return a.price - b.price });
+  prices.sort((a, b) => {
+    return a.price - b.price;
+  });
 
   while (prices.length > 3) {
     prices.pop();
   }
 
   if (prices.length === 0) {
-    res.status(200).send(JSON.stringify({failed: true}));
+    res.status(200).send(JSON.stringify({ failed: true }));
   } else {
     res.status(200).send(prices);
   }
 }
 
 module.exports = {
-  lowestPrice,
+  lowestPrice
 };

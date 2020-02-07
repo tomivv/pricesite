@@ -4,7 +4,7 @@ const router = express.Router();
 
 const price = require('./prices');
 
-router.use(function(req, res, next) {
+router.use((req, res, next) => {
   next();
 });
 
