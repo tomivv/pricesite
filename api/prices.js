@@ -1,4 +1,3 @@
-/* eslint-disable no-plusplus */
 const puppeteer = require('puppeteer');
 
 async function priceFromGigantti(ean) {
@@ -12,11 +11,19 @@ async function priceFromGigantti(ean) {
   };
 
   try {
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({headless: false});
     const page = await browser.newPage();
-    await page.goto(`https://www.gigantti.fi/search?SearchTerm=${ean}`);
+    if(ean.charAt(0) === "0") {
+      await page.goto(`https://www.gigantti.fi/search?SearchTerm=${ean.substring(1)}`, {
+        waitUntil: ['load']
+      });
+    } else {
+      await page.goto(`https://www.gigantti.fi/search?SearchTerm=${ean}`, {
+        waitUntil: ['load']
+      });
+    }
     data = await page.evaluate(() => {
-      const result = {
+      let result = {
         success: false,
         price: -1,
         name: '',
@@ -27,6 +34,7 @@ async function priceFromGigantti(ean) {
 
       const elements = document.querySelectorAll('.spec-table');
       // productCode
+      console.log('testi')
       for (let i = 0; i < elements.length; i++) {
         for (let x = 0; x < elements[i].children[0].children.length; x++) {
           if (
@@ -58,9 +66,7 @@ async function priceFromGigantti(ean) {
       if (document.querySelector('.product-title') !== null) {
         result.name = document.querySelector('.product-title').innerText;
       }
-      if (document.querySelector('link') !== null) {
-        result.link = document.querySelector('link').baseURI;
-      }
+      result.link = document.URL;
       if (result.price > -1) {
         result.success = true;
       }
@@ -144,8 +150,9 @@ async function priceFromVk(ean) {
   try {
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
-    await page.goto(`https://www.verkkokauppa.com/fi/search?query=${ean}`);
-    await page.waitForSelector('.product-list-detailed', 2000);
+    await page.goto(`https://www.verkkokauppa.com/fi/search?query=${ean}`, {
+      waitUntil: ['load', 'networkidle2']
+    });
     result = await page.evaluate(() => {
       const data = {
         success: false,
@@ -156,7 +163,6 @@ async function priceFromVk(ean) {
         productCode: '',
         ean: ''
       };
-
       data.price = parseFloat(
         document
           .querySelector('.product-price__price')
@@ -270,7 +276,13 @@ async function lowestPrice(req, res) {
     if (vk.productCode !== '') {
       jimms = JSON.parse(await priceFromJimms(vk.productCode));
     }
-    if (jimms === {} && gigantti.productCode !== '') {
+    if (jimms === {
+        success: false,
+        price: -1,
+        name: '',
+        link: '',
+        store: 'Jimms'
+      } && gigantti.productCode !== '') {
       jimms = JSON.parse(await priceFromJimms(gigantti.productCode));
     }
 
@@ -285,6 +297,7 @@ async function lowestPrice(req, res) {
   } catch (error) {
     console.error(error);
   }
+  console.log(prices)
   for (let i = 0; i < prices.length; i += 1) {
     if (prices[i].price === -1) {
       prices.splice(i, 1);
