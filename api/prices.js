@@ -1,58 +1,45 @@
 const puppeteer = require('puppeteer');
 
 async function priceFromGigantti(ean) {
-  let data = {
+  let result = {
     success: false,
     price: -1,
     name: '',
     link: '',
-    store: 'Gigantti',
-    productCode: ''
+    store: 'Gigantti'
   };
 
-  const browser = await puppeteer.launch({headless: false});
+  const browser = await puppeteer.launch();
   try {
     const page = await browser.newPage();
-    if(ean.charAt(0) === "0") {
-      await page.goto(`https://www.gigantti.fi/search?SearchTerm=${ean.substring(1)}`, {
-        waitUntil: ['load']
-      });
-    } else {
-      await page.goto(`https://www.gigantti.fi/search?SearchTerm=${ean}`, {
-        waitUntil: ['load']
-      });
-    }
-    data = await page.evaluate(() => {
-      let result = {
-        success: false,
-        price: -1,
-        name: '',
-        link: '',
-        store: 'Gigantti',
-        productCode: ''
-      };
+    await page.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.75 Safari/537.36")
+    await page.goto(`https://www.gigantti.fi/search?SearchTerm=${ean}`);
 
-      const price = document.querySelector('.product-price-container')
-
-      if (price !== null) {
-        result.price = parseFloat(price.innerText.replace(/\s/g, '').replace(',', '.'));
-      }
-      if (document.querySelector('.product-title') !== null) {
-        result.name = document.querySelector('.product-title').innerText;
-      }
-      result.link = document.URL;
-      if (result.price > -1) {
-        result.success = true;
-      }
-      // throw new Error('errr');
-      return result;
+    const name = await page.evaluateHandle(() => {
+      return document.querySelector('.product-title').innerText;
     });
+    result.name = name._remoteObject.value;
+
+    const link = await page.evaluateHandle(() => {
+      return document.URL;
+    });
+    result.link = link._remoteObject.value;
+
+    const price = await page.evaluateHandle(() => {
+      return document.querySelector('.product-price-container').innerText
+    });
+    result.price = parseFloat(price._remoteObject.value.replace(/\s/g, '').replace(',', '.'));
+
+    if (result.price > -1) {
+      result.success = true;
+    }
 
     await browser.close();
   } catch (error) {
     console.error(error);
+    await browser.close();
   }
-  return JSON.stringify(data);
+  return JSON.stringify(result);
 }
 
 async function priceFromPower(ean) {
