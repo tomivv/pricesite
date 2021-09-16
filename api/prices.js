@@ -9,7 +9,15 @@ async function priceFromGigantti(ean) {
     store: 'Gigantti'
   };
 
-  const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-setuid-sandbox",
+        "--no-sandbox",
+    ]
+  });
   try {
     const page = await browser.newPage();
     await page.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.75 Safari/537.36")
@@ -51,7 +59,15 @@ async function priceFromPower(ean) {
     store: 'Power'
   };
 
-  const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-setuid-sandbox",
+        "--no-sandbox",
+    ]
+  });
 
   try {
     const page = await browser.newPage();
@@ -110,7 +126,15 @@ async function priceFromVk(ean) {
     productCode: ''
   };
   
-  const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-setuid-sandbox",
+        "--no-sandbox",
+    ]
+  });
 
   try {
     const page = await browser.newPage();
@@ -164,7 +188,15 @@ async function priceFromJimms(productCode) {
   };
 
   try {
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+          "--disable-gpu",
+          "--disable-dev-shm-usage",
+          "--disable-setuid-sandbox",
+          "--no-sandbox",
+      ]
+    });
     const page = await browser.newPage();
     await page.goto(`https://www.jimms.fi/fi/Product/Search2?q=${productCode}`);
     data = await page.evaluate(productCode => {
