@@ -119,7 +119,8 @@ async function priceFromVk(ean) {
     name: '',
     link: '',
     store: 'Verkkokauppa.com',
-    ean: ''
+    ean: '',
+    productCode: ''
   };
   
   const browser = await puppeteer.launch();
@@ -143,6 +144,15 @@ async function priceFromVk(ean) {
       return document.querySelector('article').firstChild.href
     });
     result.link = link._remoteObject.value;
+
+    if (result.link !== '') {
+      await page.goto(result.link);
+
+      const productCode = await page.evaluateHandle(() => {
+        return document.querySelector('dd.product-share-details__js-producerId').innerHTML;
+      });
+      result.productCode = productCode._remoteObject.value;
+    }
 
     if (result.price > -1) {
       result.success = true;
@@ -226,6 +236,11 @@ async function lowestPrice(req, res) {
   prices.push(gigantti);
   prices.push(power);
   prices.push(vk);
+  
+  if(vk.productCode !== '') {
+    const jimms = JSON.parse(await priceFromJimms(vk.productCode))
+    prices.push(jimms)
+  }
 
   for (let i = 0; i < prices.length; i += 1) {
     if (prices[i].price === -1) {
